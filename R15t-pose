@@ -1,76 +1,101 @@
-local player = game:GetService("Players").LocalPlayer
-local runService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+local player = Players.LocalPlayer
 local tposeActive = false
-local loop = nil
+local renderConnection = nil
 
-local sg = Instance.new("ScreenGui", game:GetService("CoreGui"))
-local frame = Instance.new("Frame", sg)
-frame.Size = UDim2.new(0, 140, 0, 50)
-frame.Position = UDim2.new(0.1, 0, 0.5, 0)
-frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-frame.BackgroundTransparency = 0.5
-frame.Active = true
-frame.Draggable = true
+-- [UI 构建 - 参考你提供的稳健拖动结构]
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Gemini_TPose_System"
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = player:WaitForChild("PlayerGui") end
 
-local btn = Instance.new("TextButton", frame)
-btn.Size = UDim2.new(1, -10, 1, -10)
-btn.Position = UDim2.new(0, 5, 0, 5)
+local btn = Instance.new("TextButton")
+btn.Parent = ScreenGui
+btn.Size = UDim2.new(0, 200, 0, 60)
+btn.Position = UDim2.new(0.5, -100, 0.2, 0)
 btn.Text = "R15 T-Pose: OFF"
-btn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+btn.BackgroundColor3 = Color3.fromRGB(130, 30, 30)
 btn.TextColor3 = Color3.new(1, 1, 1)
-btn.Font = Enum.Font.SourceSansBold
-btn.TextSize = 14
+btn.TextScaled = true
+btn.Draggable = true -- 【核心：使用你要求的稳健拖动属性】
 
-local function apply()
-	local char = player.Character
-	if not char or not tposeActive then return end
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	if not hum or hum.RigType ~= Enum.HumanoidRigType.R15 then return end
-
-	for _, track in pairs(hum:GetPlayingAnimationTracks()) do
-		track:Stop(0)
-	end
-
-	for _, v in pairs(char:GetDescendants()) do
-		if v:IsA("Motor6D") then
-			-- 核心逻辑：Transform 是在动画之后计算的，能 100% 覆盖移动动画
-			if v.Name == "LeftShoulder" then
-				v.Transform = CFrame.Angles(0, 0, math.rad(-90))
-			elseif v.Name == "RightShoulder" then
-				v.Transform = CFrame.Angles(0, 0, math.rad(90))
-			elseif v.Name == "LeftHip" or v.Name == "RightHip" then
-				v.Transform = CFrame.new(0, 0, 0) -- 腿部垂直向下，保持 R15 默认间距
-			elseif v.Name == "LeftElbow" or v.Name == "RightElbow" or v.Name == "LeftKnee" or v.Name == "RightKnee" then
-				v.Transform = CFrame.new(0, 0, 0) -- 锁死肘关节和膝关节，确保手臂和腿笔直
-			elseif v.Name == "Root" or v.Name == "Waist" then
-				v.Transform = CFrame.new(0, 0, 0) -- 锁死躯干，防止移动时弯腰
-			end
-		end
-	end
+-- 停止动画函数
+local function stopAnims(char)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        for _, v in pairs(hum:GetPlayingAnimationTracks()) do v:Stop(0) end
+    end
 end
 
+-- R15 完美平举核心逻辑
+local function applyPose()
+    local char = player.Character
+    if not char or not tposeActive then return end
+    
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.RigType ~= Enum.HumanoidRigType.R15 then return end
+
+    -- 每帧停止所有动画，确保移动时不晃动
+    stopAnims(char)
+
+    -- 强制锁定 R15 关节 Transform 实现 90 度平举
+    for _, v in pairs(char:GetDescendants()) do
+        if v:IsA("Motor6D") then
+            if v.Name == "LeftShoulder" then
+                v.Transform = CFrame.Angles(0, 0, math.rad(-90))
+            elseif v.Name == "RightShoulder" then
+                v.Transform = CFrame.Angles(0, 0, math.rad(90))
+            elseif v.Name == "LeftHip" or v.Name == "RightHip" then
+                v.Transform = CFrame.new(0, 0, 0) -- 腿部垂直，不合并
+            elseif v.Name == "LeftElbow" or v.Name == "RightElbow" or v.Name == "LeftKnee" or v.Name == "RightKnee" then
+                v.Transform = CFrame.new(0, 0, 0) -- 肢体笔直
+            elseif v.Name == "Root" or v.Name == "Waist" or v.Name == "Neck" then
+                v.Transform = CFrame.new(0, 0, 0) -- 身体不弯曲
+            end
+        end
+    end
+end
+
+-- 开关逻辑
 btn.MouseButton1Click:Connect(function()
-	tposeActive = not tposeActive
-	local char = player.Character
-	if tposeActive then
-		btn.Text = "R15 T-Pose: ON"
-		btn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
-		if char and char:FindFirstChild("Animate") then char.Animate.Disabled = true end
-		loop = runService.Stepped:Connect(apply)
-	else
-		btn.Text = "R15 T-Pose: OFF"
-		btn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-		if loop then loop:Disconnect() end
-		if char then
-			if char:FindFirstChild("Animate") then char.Animate.Disabled = false end
-			-- R15 无需 BreakJoints，停止 Transform 覆盖后动画会自动恢复
-		end
-	end
+    tposeActive = not tposeActive
+    local char = player.Character
+    
+    if tposeActive then
+        btn.Text = "R15 T-Pose: ON"
+        btn.BackgroundColor3 = Color3.fromRGB(30, 130, 30)
+        
+        if char then
+            local anim = char:FindFirstChild("Animate")
+            if anim then anim.Disabled = true end
+            stopAnims(char)
+        end
+        
+        if renderConnection then renderConnection:Disconnect() end
+        renderConnection = RunService.Stepped:Connect(applyPose)
+    else
+        btn.Text = "R15 T-Pose: OFF"
+        btn.BackgroundColor3 = Color3.fromRGB(130, 30, 30)
+        
+        if renderConnection then renderConnection:Disconnect() end
+        if char then
+            local anim = char:FindFirstChild("Animate")
+            if anim then anim.Disabled = false end
+            -- R15 无损恢复，不使用 BreakJoints，不重置人物
+        end
+    end
 end)
 
-player.CharacterAdded:Connect(function(c)
-	if tposeActive then
-		task.wait(1)
-		if c:FindFirstChild("Animate") then c.Animate.Disabled = true end
-	end
+-- 人物重生检测
+player.CharacterAdded:Connect(function(newChar)
+    if tposeActive then
+        task.wait(1)
+        local anim = newChar:WaitForChild("Animate", 5)
+        if anim then anim.Disabled = true end
+    end
 end)
+
+print("R15 T-Pose finishes loading")
