@@ -1,39 +1,39 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+本地玩家=游戏：GetService(“玩家”)
+本地RunService=game:GetService("RunService")
 
-local player = Players.LocalPlayer
-local tposeActive = false
-local renderConnection = nil
+本地播放器=players.LocalPlayer
+局部tposeActive=false
+本地renderConnection=nil
 
 -- 强制停止所有正在播放的动画
-local function stopAllAnimations(char)
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        local animator = humanoid:FindFirstChildOfClass("Animator")
-        if animator then
-            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                track:Stop()
-            end
-        end
-        for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-            track:Stop()
-        end
-    end
-end
+局部函数stopAllAnimations(char)
+局部humanoid=char:FindFirstChildOfClass("Humanoid")
+如果是人形那么
+本地animator=类人：FindFirstChildOfClass("Animator")
+如果动画师，则
+对于_，在ipairs中跟踪(动画程序：GetPlayingAnimationTracks())
+轨迹：停止()
+结束
+结束
+对于_，在ipairs中跟踪(仿人：GetPlayingAnimationTracks())do
+轨迹：停止()
+结束
+结束
+结束
 
--- 每帧强制锁定关节 (使用 Transform 以保证 FE 同步)
-local function lockTPose()
-    local char = player.Character
-    if not char then return end
+--每帧强制锁定关节(使用改变以保证FE同步)
+本地函数locktpose()
+本地字符=播放器.字符
+如果不是收费，则返回end
     
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
+局部humanoid=char:FindFirstChildOfClass("Humanoid")
+如果不是人形，则返回结束
 
-    if humanoid.RigType == Enum.HumanoidRigType.R6 then
-        -- R6 关节处理
-        local torso = char:FindFirstChild("Torso")
-        if torso then
-            local ls = torso:FindFirstChild("Left Shoulder")
+如果humanoid.RigType==枚举.HumanoidRigType.R6，则
+--R6关节处理
+局部躯干=char:FindFirstChild("躯干")
+如果躯干，那么
+局部ls=躯干：FindFirstChild(“左肩”)
             local rs = torso:FindFirstChild("Right Shoulder")
             local lh = torso:FindFirstChild("Left Hip")
             local rh = torso:FindFirstChild("Right Hip")
