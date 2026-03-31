@@ -1,135 +1,161 @@
-本地玩家=游戏：GetService(“玩家”)
-本地RunService=game:GetService("RunService")
+-- Due to the use of a translator, the entire line of code becomes Chinese, so it cannot be run
 
-本地播放器=players.LocalPlayer
-局部tposeActive=false
-本地renderConnection=nil
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
--- 强制停止所有正在播放的动画
-局部函数stopAllAnimations(char)
-局部humanoid=char:FindFirstChildOfClass("Humanoid")
-如果是人形那么
-本地animator=类人：FindFirstChildOfClass("Animator")
-如果动画师，则
-对于_，在ipairs中跟踪(动画程序：GetPlayingAnimationTracks())
-轨迹：停止()
-结束
-结束
-对于_，在ipairs中跟踪(仿人：GetPlayingAnimationTracks())do
-轨迹：停止()
-结束
-结束
-结束
+local player = Players.LocalPlayer
+local tposeActive = false
+local renderConnection = nil
 
---每帧强制锁定关节(使用改变以保证FE同步)
-本地函数locktpose()
-本地字符=播放器.字符
-如果不是收费，则返回end
+-- 创建 UI
+local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+ScreenGui.Name = "TPoseGui"
+
+-- 主框架 (可拖动容器)
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 130, 0, 50)
+MainFrame.Position = UDim2.new(0, 50, 0.5, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 2
+MainFrame.Active = true -- 必须设为 true 才能检测输入
+
+-- 切换按钮
+local ToggleBtn = Instance.new("TextButton", MainFrame)
+ToggleBtn.Size = UDim2.new(1, -10, 1, -10)
+ToggleBtn.Position = UDim2.new(0, 5, 0, 5)
+ToggleBtn.Text = "T-Pose: OFF"
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ToggleBtn.TextSize = 18
+
+-- === 拖动逻辑开始 ===
+local dragging, dragInput, dragStart, startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+MainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+-- === 拖动逻辑结束 ===
+
+-- 停止动画函数
+local function stopAnims(char)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        for _, v in pairs(hum:GetPlayingAnimationTracks()) do v:Stop(0) end
+    end
+end
+
+-- T-Pose 核心逻辑 (修复角度和位置)
+local function applyPose()
+    local char = player.Character
+    if not char or not tposeActive then return end
     
-局部humanoid=char:FindFirstChildOfClass("Humanoid")
-如果不是人形，则返回结束
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
 
-如果humanoid.RigType==枚举.HumanoidRigType.R6，则
---R6关节处理
-局部躯干=char:FindFirstChild("躯干")
-如果躯干，那么
-局部ls=躯干：FindFirstChild(“左肩”)
-            local rs = torso:FindFirstChild("Right Shoulder")
-            local lh = torso:FindFirstChild("Left Hip")
-            local rh = torso:FindFirstChild("Right Hip")
-            
-            -- 手臂横向抬起90度，双脚并拢拉直
-            if ls then ls.Transform = CFrame.Angles(0, 0, math.rad(-90)) end
-            if rs then rs.Transform = CFrame.Angles(0, 0, math.rad(90)) end
-            if lh then lh.Transform = CFrame.new(0, 0, 0) end
-            if rh then rh.Transform = CFrame.new(0, 0, 0) end
+    if hum.RigType == Enum.HumanoidRigType.R6 then
+        -- R6 适配
+        local t = char:FindFirstChild("Torso")
+        if t then
+            if t:FindFirstChild("Left Shoulder") then
+                t["Left Shoulder"].Transform = CFrame.Angles(0, 0, math.rad(-90))
+            end
+            if t:FindFirstChild("Right Shoulder") then
+                t["Right Shoulder"].Transform = CFrame.Angles(0, 0, math.rad(90))
+            end
+            if t:FindFirstChild("Left Hip") then
+                t["Left Hip"].Transform = CFrame.new(0, 0, 0)
+            end
+            if t:FindFirstChild("Right Hip") then
+                t["Right Hip"].Transform = CFrame.new(0, 0, 0)
+            end
         end
     else
-        -- R15 关节处理
-        local leftUpperArm = char:FindFirstChild("LeftUpperArm")
-        local rightUpperArm = char:FindFirstChild("RightUpperArm")
-        local leftUpperLeg = char:FindFirstChild("LeftUpperLeg")
-        local rightUpperLeg = char:FindFirstChild("RightUpperLeg")
-        local lowerTorso = char:FindFirstChild("LowerTorso")
-
-        -- 手臂横向抬起90度，双腿拉直不弯曲
-        if leftUpperArm and leftUpperArm:FindFirstChild("LeftShoulder") then
-            leftUpperArm.LeftShoulder.Transform = CFrame.Angles(0, 0, math.rad(-90))
-        end
-        if rightUpperArm and rightUpperArm:FindFirstChild("RightShoulder") then
-            rightUpperArm.RightShoulder.Transform = CFrame.Angles(0, 0, math.rad(90))
-        end
-        if leftUpperLeg and leftUpperLeg:FindFirstChild("LeftHip") then
-            leftUpperLeg.LeftHip.Transform = CFrame.new(0, 0, 0)
-        end
-        if rightUpperLeg and rightUpperLeg:FindFirstChild("RightHip") then
-            rightUpperLeg.RightHip.Transform = CFrame.new(0, 0, 0)
-        end
-        -- 锁死脊椎防止走路时晃动
-        if lowerTorso and lowerTorso:FindFirstChild("Root") then
-            lowerTorso.Root.Transform = CFrame.new(0, 0, 0)
+        -- R15 适配 (强制锁定肩膀和髋部)
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("Motor6D") then
+                if v.Name == "LeftShoulder" or v.Name == "LeftUpperArm" then
+                    v.Transform = CFrame.Angles(0, 0, math.rad(-90))
+                elseif v.Name == "RightShoulder" or v.Name == "RightUpperArm" then
+                    v.Transform = CFrame.Angles(0, 0, math.rad(90))
+                elseif v.Name == "LeftHip" or v.Name == "LeftUpperLeg" then
+                    v.Transform = CFrame.new(0, 0, 0)
+                elseif v.Name == "RightHip" or v.Name == "RightUpperLeg" then
+                    v.Transform = CFrame.new(0, 0, 0)
+                elseif v.Name == "Neck" or v.Name == "Waist" or v.Name == "Root" then
+                    v.Transform = CFrame.new(0, 0, 0) -- 锁死躯干
+                end
+            end
         end
     end
 end
 
--- UI 创建
-local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-local ToggleBtn = Instance.new("TextButton", ScreenGui)
-
-ToggleBtn.Size = UDim2.new(0, 120, 0, 40)
-ToggleBtn.Position = UDim2.new(0, 20, 0.5, 0)
-ToggleBtn.Text = "T-Pose: OFF"
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleBtn.Font = Enum.Font.SourceSansBold
-ToggleBtn.TextSize = 18
-
--- 开关逻辑
+-- 开关点击事件
 ToggleBtn.MouseButton1Click:Connect(function()
     tposeActive = not tposeActive
     local char = player.Character
-
+    
     if tposeActive then
         ToggleBtn.Text = "T-Pose: ON"
         ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         
         if char then
-            -- 1. 禁用自带动画脚本，防止它跟脚本抢夺关节控制权
-            local animate = char:FindFirstChild("Animate")
-            if animate then animate.Disabled = true end
-            -- 2. 停掉当前正在播放的走路/待机动画
-            stopAllAnimations(char)
+            local anim = char:FindFirstChild("Animate")
+            if anim then anim.Disabled = true end
+            stopAnims(char)
         end
         
-        -- 3. 启动高频覆盖
         if renderConnection then renderConnection:Disconnect() end
-        renderConnection = RunService.Stepped:Connect(function()
-            if tposeActive then lockTPose() end
-        end)
+        renderConnection = RunService.Stepped:Connect(applyPose)
     else
         ToggleBtn.Text = "T-Pose: OFF"
         ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
         
-        -- 断开循环，停止强制覆盖
-        if renderConnection then 
-            renderConnection:Disconnect() 
-            renderConnection = nil 
-        end
-        
-        -- 恢复正常（不再重置人物）
+        if renderConnection then renderConnection:Disconnect() end
         if char then
-            local animate = char:FindFirstChild("Animate")
-            if animate then animate.Disabled = false end
+            local anim = char:FindFirstChild("Animate")
+            if anim then anim.Disabled = false end
+            -- 恢复姿势：由于我们修改的是 Transform，停止写入后，动画脚本会自动接管，无需重置人物
         end
     end
 end)
 
--- 死亡/重置后自动重连功能
+-- 人物重生检测
 player.CharacterAdded:Connect(function(newChar)
     if tposeActive then
-        task.wait(0.5) -- 给游戏一点时间加载角色
-        local animate = newChar:WaitForChild("Animate", 3)
-        if animate then animate.Disabled = true end
-        stopAllAnimations(newChar)
+        task.wait(0.5)
+        local anim = newChar:WaitForChild("Animate", 5)
+        if anim then anim.Disabled = true end
+        stopAnims(newChar)
     end
 end)
+
+print("T-Pose 脚本已加载，UI 可自由拖动。")
